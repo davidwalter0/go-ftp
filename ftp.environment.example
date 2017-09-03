@@ -1,0 +1,6 @@
+#!/bin/bash
+export FTP_FILENAME=Example.txt
+export FTP_HOST=192.168.0.12
+export FTP_PORT=2121
+export FTP_USER=ftp
+export FTP_PASSWORD=ftp

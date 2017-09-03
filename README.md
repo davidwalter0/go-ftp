@@ -1,4 +1,20 @@
+---
+
 Status:  Experimental
+
+
+---
+*Example unit test*
+
+- configure an ftp server | tested with a phone ftp app
+- modify the ftp.environment.example and save as your file name to source
+- source the modified environment file
+- run the tests
+
+```
+    . ftp.environment
+    go test
+```
 
 TODO:
 
@@ -51,7 +67,7 @@ FTP Protocol Command Summary
 
 Sample Protocol Session (control session only):
 ---------------
-
+```
 $ telnet localhost 21
 220 ProFTPD 1.3.2c Server (ProFTPD Test Server) [127.0.0.1]
 USER
@@ -71,4 +87,4 @@ RETR test_file.txt
 226 Transfer complete
 QUIT
 221 Goodbye.
-
+```
