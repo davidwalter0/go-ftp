@@ -2,6 +2,7 @@ package ftp
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -133,6 +134,82 @@ func setReadDeadline(c net.Conn, duration uint) {
 	// disable timeout used for test failure
 	timeoutDuration := time.Duration(time.Duration(duration) * time.Second)
 	c.SetReadDeadline(time.Now().Add(timeoutDuration))
+}
+
+// Download a file to a []byte slice and return it
+func (c *Connection) GetBuffer(src, mode string, timeout uint) ([]byte, error) {
+	// Use PASV to set up the data port.
+	pasvCode, pasvLine, err := c.Cmd("PASV", "")
+	if err != nil {
+		return nil, err
+	}
+	pasvErr := checkResponseCode(2, pasvCode)
+	if pasvErr != nil {
+		msg := fmt.Sprintf("Cannot set PASV. Error: %v", pasvErr)
+		return nil, fmt.Errorf(msg)
+	}
+	dataPort, err := extractDataPort(pasvLine)
+	/*_, err = extractDataPort(pasvLine)*/
+	if err != nil {
+		return nil, err
+	}
+
+	// Set the TYPE (ASCII or Binary)
+	typeCode, typeLine, err := c.Cmd("TYPE", mode)
+	if err != nil {
+		return nil, err
+	}
+	typeErr := checkResponseCode(2, typeCode)
+	if typeErr != nil {
+		msg := fmt.Sprintf("Cannot set TYPE. Error: '%v'. Line: '%v'", typeErr, typeLine)
+		return nil, fmt.Errorf(msg)
+	}
+
+	// Can't use Cmd() for RETR because it doesn't return until *after* you've
+	// downloaded the requested file.
+	command := []byte("RETR " + src + CRLF)
+	_, err = c.control.Write(command)
+	if err != nil {
+		return nil, err
+	}
+
+	// Open connection to remote data port.
+	remoteConnectString := c.hostname + ":" + fmt.Sprintf("%d", dataPort)
+	downloadConn, err := net.Dial("tcp", remoteConnectString)
+	defer downloadConn.Close()
+	if err != nil {
+		msg := fmt.Sprintf("Couldn't connect to server's remote data port. Error: %v", err)
+		return nil, fmt.Errorf(msg)
+	}
+
+	// Buffer for downloading and writing to file
+	bufLen := 1024
+	buf := make([]byte, bufLen)
+	var result bytes.Buffer
+	result.Grow(2 ^ (1024 * 1024))
+	if timeout > 0 {
+		setReadDeadline(downloadConn, timeout)
+	}
+
+	// Read from the server and write the contents to a file
+	for {
+		bytesRead, readErr := downloadConn.Read(buf)
+		if bytesRead > 0 {
+			for i, n := 0, 0; i < bytesRead; i += n {
+				n, readErr = result.Write(buf[0:bytesRead])
+				if err != nil {
+					return nil, readErr
+				}
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return nil, readErr
+		}
+	}
+	return result.Bytes(), nil
 }
 
 // Alias for DownloadFile
